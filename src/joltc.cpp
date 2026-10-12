@@ -117,6 +117,7 @@ DEF_MAP_DECL(ContactManifold, JPH_ContactManifold)
 DEF_MAP_DECL(BodyCreationSettings, JPH_BodyCreationSettings)
 DEF_MAP_DECL(SoftBodyCreationSettings, JPH_SoftBodyCreationSettings)
 DEF_MAP_DECL(SoftBodySharedSettings, JPH_SoftBodySharedSettings)
+DEF_MAP_DECL(SoftBodyMotionProperties, JPH_SoftBodyMotionProperties)
 DEF_MAP_DECL(Body, JPH_Body)
 DEF_MAP_DECL(BodyInterface, JPH_BodyInterface)
 DEF_MAP_DECL(BodyLockInterface, JPH_BodyLockInterface)
@@ -308,6 +309,18 @@ static inline void FromJolt(const Plane& value, JPH_Plane* result)
 {
 	FromJolt(value.GetNormal(), &result->normal);
 	result->distance = value.GetConstant();
+}
+
+static inline void FromJolt(const SoftBodyVertex& vertex, JPH_SoftBodyVertex* result)
+{
+	FromJolt(vertex.mPreviousPosition, &result->previousPosition);
+	FromJolt(vertex.mPosition, &result->position);
+	FromJolt(vertex.mVelocity, &result->velocity);
+	FromJolt(vertex.mCollisionPlane, &result->collisionPlane);
+	result->collidingShapeIndex = vertex.mCollidingShapeIndex;
+	result->hasContact = vertex.mHasContact;
+	result->largestPenetration = vertex.mLargestPenetration;
+	result->invMass = vertex.mInvMass;
 }
 
 static inline void FromJolt(const AABox& value, JPH_AABox* result)
@@ -7917,6 +7930,137 @@ void JPH_Body_GetSoftBodyVertexPositions(const JPH_Body* body, JPH_Vec3* outPosi
 	}
 
 	if (outCount) *outCount = numVertices; // always report true count, not writeCount
+}
+
+static inline JPH::SoftBodyMotionProperties* GetSoftBodyMotionProperties(JPH_Body* body)
+{
+	if (!body || !AsBody(body)->IsSoftBody())
+		return nullptr;
+
+	return static_cast<JPH::SoftBodyMotionProperties*>(AsBody(body)->GetMotionProperties());
+}
+
+static inline const JPH::SoftBodyMotionProperties* GetSoftBodyMotionProperties(const JPH_Body* body)
+{
+	if (!body || !AsBody(body)->IsSoftBody())
+		return nullptr;
+
+	return static_cast<const JPH::SoftBodyMotionProperties*>(AsBody(body)->GetMotionProperties());
+}
+
+JPH_SoftBodyMotionProperties* JPH_Body_GetSoftBodyMotionProperties(JPH_Body* body)
+{
+	return ToSoftBodyMotionProperties(GetSoftBodyMotionProperties(body));
+}
+
+const JPH_SoftBodySharedSettings* JPH_SoftBodyMotionProperties_GetSettings(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? ToSoftBodySharedSettings(AsSoftBodyMotionProperties(properties)->GetSettings()) : nullptr;
+}
+
+uint32_t JPH_SoftBodyMotionProperties_GetVertexCount(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? static_cast<uint32_t>(AsSoftBodyMotionProperties(properties)->GetVertices().size()) : 0;
+}
+
+bool JPH_SoftBodyMotionProperties_GetVertex(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_SoftBodyVertex* outVertex)
+{
+	if (!properties || !outVertex)
+		return false;
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	FromJolt(vertices[index], outVertex);
+	return true;
+}
+
+bool JPH_SoftBodyMotionProperties_GetVertexPosition(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_Vec3* outPosition)
+{
+	if (!properties || !outPosition)
+		return false;
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	FromJolt(vertices[index].mPosition, outPosition);
+	return true;
+}
+
+bool JPH_SoftBodyMotionProperties_GetVertexVelocity(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_Vec3* outVelocity)
+{
+	if (!properties || !outVelocity)
+		return false;
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	FromJolt(vertices[index].mVelocity, outVelocity);
+	return true;
+}
+
+bool JPH_SoftBodyMotionProperties_SetVertexVelocity(JPH_SoftBodyMotionProperties* properties, uint32_t index, const JPH_Vec3* velocity)
+{
+	if (!properties || !velocity)
+		return false;
+
+	auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	vertices[index].mVelocity = ToJolt(velocity);
+	return true;
+}
+
+bool JPH_SoftBodyMotionProperties_GetVertexInvMass(const JPH_SoftBodyMotionProperties* properties, uint32_t index, float* outInvMass)
+{
+	if (!properties || !outInvMass)
+		return false;
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	*outInvMass = vertices[index].mInvMass;
+	return true;
+}
+
+bool JPH_SoftBodyMotionProperties_SetVertexInvMass(JPH_SoftBodyMotionProperties* properties, uint32_t index, float invMass)
+{
+	if (!properties)
+		return false;
+
+	auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	if (index >= vertices.size())
+		return false;
+
+	vertices[index].mInvMass = invMass;
+	return true;
+}
+
+void JPH_SoftBodyMotionProperties_GetVertexPositions(const JPH_SoftBodyMotionProperties* properties, JPH_Vec3* outPositions, uint32_t capacity, uint32_t* outCount)
+{
+	if (!properties)
+	{
+		if (outCount)
+			*outCount = 0;
+		return;
+	}
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	const uint32_t numVertices = static_cast<uint32_t>(vertices.size());
+	if (outCount)
+		*outCount = numVertices;
+
+	if (!outPositions || capacity == 0)
+		return;
+
+	const uint32_t writeCount = capacity < numVertices ? capacity : numVertices;
+	for (uint32_t i = 0; i < writeCount; ++i)
+		FromJolt(vertices[i].mPosition, &outPositions[i]);
 }
 
 /* Contact Listener */

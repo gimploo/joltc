@@ -126,6 +126,7 @@ typedef struct JPH_EmptyShape							JPH_EmptyShape;
 typedef struct JPH_BodyCreationSettings					JPH_BodyCreationSettings;
 typedef struct JPH_SoftBodyCreationSettings				JPH_SoftBodyCreationSettings;
 typedef struct JPH_SoftBodySharedSettings 				JPH_SoftBodySharedSettings;
+typedef struct JPH_SoftBodyMotionProperties				JPH_SoftBodyMotionProperties;
 typedef struct JPH_BodyInterface						JPH_BodyInterface;
 typedef struct JPH_BodyLockInterface					JPH_BodyLockInterface;
 typedef struct JPH_BroadPhaseQuery						JPH_BroadPhaseQuery;
@@ -541,6 +542,19 @@ typedef struct JPH_SoftFace
 	uint32_t vertex3;
 	uint32_t materialIndex;
 } JPH_SoftFace;
+
+/// Run time information for a single particle of a soft body
+typedef struct JPH_SoftBodyVertex
+{
+	JPH_Vec3				previousPosition;		///< Internal use only. Position at the previous time step
+	JPH_Vec3				position;				///< Position, relative to the center of mass of the soft body
+	JPH_Vec3				velocity;				///< Velocity, relative to the center of mass of the soft body
+	JPH_Plane				collisionPlane;			///< Internal use only. Nearest collision plane, relative to the center of mass of the soft body
+	int32_t					collidingShapeIndex;	///< Internal use only. Index in the colliding shapes list of the body we may collide with
+	bool					hasContact;				///< True if the vertex has collided with anything in the last update
+	float					largestPenetration;		///< Internal use only. Used while finding the collision plane, stores the largest penetration found so far
+	float					invMass;				///< Inverse mass (1 / mass)
+} JPH_SoftBodyVertex;
 
 typedef struct JPH_ContactSettings {
 	float					combinedFriction;
@@ -2265,6 +2279,18 @@ JPH_CAPI JPH_Body* JPH_Body_GetFixedToWorldBody(void);
 JPH_CAPI uint32_t JPH_Body_GetSoftBodyVertexCount(const JPH_Body* body);
 JPH_CAPI void     JPH_Body_GetSoftBodyVertexPosition(const JPH_Body* body, uint32_t index, JPH_Vec3* outPos);
 JPH_CAPI void 	  JPH_Body_GetSoftBodyVertexPositions(const JPH_Body* body, JPH_Vec3* outPositions, uint32_t capacity, uint32_t* outCount);
+
+/* JPH_SoftBodyMotionProperties */
+JPH_CAPI JPH_SoftBodyMotionProperties* JPH_Body_GetSoftBodyMotionProperties(JPH_Body* body);
+JPH_CAPI const JPH_SoftBodySharedSettings* JPH_SoftBodyMotionProperties_GetSettings(const JPH_SoftBodyMotionProperties* properties);
+JPH_CAPI uint32_t JPH_SoftBodyMotionProperties_GetVertexCount(const JPH_SoftBodyMotionProperties* properties);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertex(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_SoftBodyVertex* outVertex);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertexPosition(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_Vec3* outPosition);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertexVelocity(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_Vec3* outVelocity);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_SetVertexVelocity(JPH_SoftBodyMotionProperties* properties, uint32_t index, const JPH_Vec3* velocity);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertexInvMass(const JPH_SoftBodyMotionProperties* properties, uint32_t index, float* outInvMass);
+JPH_CAPI bool JPH_SoftBodyMotionProperties_SetVertexInvMass(JPH_SoftBodyMotionProperties* properties, uint32_t index, float invMass);
+JPH_CAPI void JPH_SoftBodyMotionProperties_GetVertexPositions(const JPH_SoftBodyMotionProperties* properties, JPH_Vec3* outPositions, uint32_t capacity, uint32_t* outCount);
 
 /* JPH_BroadPhaseLayerFilter_Procs */
 typedef struct JPH_BroadPhaseLayerFilter_Procs {

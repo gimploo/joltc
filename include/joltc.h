@@ -2359,6 +2359,7 @@ JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertexInvMass(const JPH_SoftBodyMo
 JPH_CAPI bool JPH_SoftBodyMotionProperties_SetVertexInvMass(JPH_SoftBodyMotionProperties* properties, uint32_t index, float invMass);
 JPH_CAPI void JPH_SoftBodyMotionProperties_GetVertexPositions(const JPH_SoftBodyMotionProperties* properties, JPH_Vec3* outPositions, uint32_t capacity, uint32_t* outCount);
 JPH_CAPI bool JPH_SoftBodyMotionProperties_GetVertices(const JPH_SoftBodyMotionProperties* properties, JPH_SoftBodyVertex* outVertices, uint32_t count);
+JPH_CAPI JPH_SoftBodyVertex* JPH_SoftBodyMotionProperties_GetVerticesPtr(JPH_SoftBodyMotionProperties* properties);
 
 JPH_CAPI uint32_t JPH_SoftBodyMotionProperties_GetFaceCount(const JPH_SoftBodyMotionProperties* properties);
 JPH_CAPI bool JPH_SoftBodyMotionProperties_GetFace(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_SoftFace* outFace);

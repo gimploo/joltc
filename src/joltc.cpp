@@ -12290,6 +12290,14 @@ void JPH_LinearCurve_GetPoints(const JPH_LinearCurve* curve, JPH_Point* points, 
 	}
 }
 
+JPH_CAPI JPH_SoftBodyVertex* JPH_SoftBodyMotionProperties_GetVerticesPtr(
+    JPH_SoftBodyMotionProperties* properties
+) {
+    JPH_ASSERT(properties != nullptr);
+    auto* impl = reinterpret_cast<SoftBodyMotionProperties*>(properties);
+    return reinterpret_cast<JPH_SoftBodyVertex*>(impl->GetVertices().data());
+}
+
 JPH_TempAllocator *JPH_TempAllocator_Create(uint32_t size)
 {
     return ToTempAllocator(new TempAllocatorImplWithMallocFallback(size));

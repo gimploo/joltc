@@ -334,6 +334,36 @@ static inline void FromJolt(const Mat44& matrix, JPH_Mat4* result)
 	memcpy(result, &matrix, sizeof(JPH_Mat4));
 }
 
+static inline void FromJolt(const SoftBodySharedSettings::SkinWeight& value, JPH_SoftSkinWeight* result)
+{
+	result->invBindIndex = value.mInvBindIndex;
+	result->weight = value.mWeight;
+}
+
+static inline void FromJolt(const SoftBodySharedSettings::InvBind& value, JPH_SoftInvBind* result)
+{
+	result->jointIndex = value.mJointIndex;
+	FromJolt(value.mInvBind, &result->invBind);
+}
+
+static inline void FromJolt(const SoftBodySharedSettings::Skinned& value, JPH_SoftSkinned* result)
+{
+	result->vertex = value.mVertex;
+	for (uint32_t i = 0; i < SoftBodySharedSettings::Skinned::cMaxSkinWeights; ++i)
+		FromJolt(value.mWeights[i], &result->weights[i]);
+	result->maxDistance = value.mMaxDistance;
+	result->backStopDistance = value.mBackStopDistance;
+	result->backStopRadius = value.mBackStopRadius;
+	result->normalInfo = value.mNormalInfo;
+}
+
+static inline void FromJolt(const SoftBodySharedSettings::LRA& value, JPH_SoftLRA* result)
+{
+	result->vertex1 = value.mVertex[0];
+	result->vertex2 = value.mVertex[1];
+	result->maxDistance = value.mMaxDistance;
+}
+
 #if defined(JPH_DOUBLE_PRECISION)
 static inline void FromJolt(const RVec3& vec, JPH_RVec3* result)
 {
@@ -552,6 +582,70 @@ static inline JPH::MassProperties ToJolt(const JPH_MassProperties* properties)
 		return result;
 	result.mMass = properties->mass;
 	result.mInertia = ToJolt(&properties->inertia);
+	return result;
+}
+
+static inline SoftBodySharedSettings::VertexAttributes ToJolt(const JPH_SoftBodyVertexAttributes* value)
+{
+	SoftBodySharedSettings::VertexAttributes result{};
+	if (!value)
+		return result;
+
+	result.mCompliance = value->compliance;
+	result.mShearCompliance = value->shearCompliance;
+	result.mBendCompliance = value->bendCompliance;
+	result.mLRAType = static_cast<SoftBodySharedSettings::ELRAType>(value->lraType);
+	result.mLRAMaxDistanceMultiplier = value->lraMaxDistanceMultiplier;
+	return result;
+}
+
+static inline SoftBodySharedSettings::SkinWeight ToJolt(const JPH_SoftSkinWeight* value)
+{
+	SoftBodySharedSettings::SkinWeight result{};
+	if (!value)
+		return result;
+
+	result.mInvBindIndex = value->invBindIndex;
+	result.mWeight = value->weight;
+	return result;
+}
+
+static inline SoftBodySharedSettings::InvBind ToJolt(const JPH_SoftInvBind* value)
+{
+	SoftBodySharedSettings::InvBind result{};
+	if (!value)
+		return result;
+
+	result.mJointIndex = value->jointIndex;
+	result.mInvBind = ToJolt(&value->invBind);
+	return result;
+}
+
+static inline SoftBodySharedSettings::Skinned ToJolt(const JPH_SoftSkinned* value)
+{
+	SoftBodySharedSettings::Skinned result{};
+	if (!value)
+		return result;
+
+	result.mVertex = value->vertex;
+	for (uint32_t i = 0; i < SoftBodySharedSettings::Skinned::cMaxSkinWeights; ++i)
+		result.mWeights[i] = ToJolt(&value->weights[i]);
+	result.mMaxDistance = value->maxDistance;
+	result.mBackStopDistance = value->backStopDistance;
+	result.mBackStopRadius = value->backStopRadius;
+	result.mNormalInfo = value->normalInfo;
+	return result;
+}
+
+static inline SoftBodySharedSettings::LRA ToJolt(const JPH_SoftLRA* value)
+{
+	SoftBodySharedSettings::LRA result{};
+	if (!value)
+		return result;
+
+	result.mVertex[0] = value->vertex1;
+	result.mVertex[1] = value->vertex2;
+	result.mMaxDistance = value->maxDistance;
 	return result;
 }
 
@@ -3927,9 +4021,121 @@ void JPH_SoftBodySharedSettings_CreateConstraints(JPH_SoftBodySharedSettings* se
 		static_cast<JPH::SoftBodySharedSettings::EBendType>(bendType));
 }
 
+void JPH_SoftBodySharedSettings_CreateConstraints2(JPH_SoftBodySharedSettings* settings, const JPH_SoftBodyVertexAttributes* attributes, uint32_t attributeCount, JPH_SoftBodyBendType bendType, float angleTolerance)
+{
+	if (!settings)
+		return;
+
+	auto* joltSettings = AsSoftBodySharedSettings(settings);
+	JPH::Array<JPH::SoftBodySharedSettings::VertexAttributes> joltAttributes;
+	if (attributes && attributeCount > 0)
+	{
+		joltAttributes.reserve(attributeCount);
+		for (uint32_t i = 0; i < attributeCount; ++i)
+			joltAttributes.push_back(ToJolt(&attributes[i]));
+	}
+	else
+	{
+		joltAttributes.push_back(JPH::SoftBodySharedSettings::VertexAttributes());
+	}
+
+	joltSettings->CreateConstraints(joltAttributes.data(), (JPH::uint)joltAttributes.size(),
+		static_cast<JPH::SoftBodySharedSettings::EBendType>(bendType), angleTolerance);
+}
+
+void JPH_SoftBodySharedSettings_CalculateEdgeLengths(JPH_SoftBodySharedSettings* settings)
+{
+	if (settings)
+		AsSoftBodySharedSettings(settings)->CalculateEdgeLengths();
+}
+
+void JPH_SoftBodySharedSettings_CalculateLRALengths(JPH_SoftBodySharedSettings* settings, float maxDistanceMultiplier)
+{
+	if (settings)
+		AsSoftBodySharedSettings(settings)->CalculateLRALengths(maxDistanceMultiplier);
+}
+
+void JPH_SoftBodySharedSettings_CalculateSkinnedConstraintNormals(JPH_SoftBodySharedSettings* settings)
+{
+	if (settings)
+		AsSoftBodySharedSettings(settings)->CalculateSkinnedConstraintNormals();
+}
+
 void JPH_SoftBodySharedSettings_Optimize(JPH_SoftBodySharedSettings* settings)
 {
 	AsSoftBodySharedSettings(settings)->Optimize();
+}
+
+void JPH_SoftBodySharedSettings_AddInvBind(JPH_SoftBodySharedSettings* settings, const JPH_SoftInvBind* invBind)
+{
+	if (settings && invBind)
+		AsSoftBodySharedSettings(settings)->mInvBindMatrices.push_back(ToJolt(invBind));
+}
+
+uint32_t JPH_SoftBodySharedSettings_GetInvBindCount(const JPH_SoftBodySharedSettings* settings)
+{
+	return settings ? static_cast<uint32_t>(AsSoftBodySharedSettings(settings)->mInvBindMatrices.size()) : 0;
+}
+
+bool JPH_SoftBodySharedSettings_GetInvBind(const JPH_SoftBodySharedSettings* settings, uint32_t index, JPH_SoftInvBind* outInvBind)
+{
+	if (!settings || !outInvBind)
+		return false;
+
+	const auto& invBinds = AsSoftBodySharedSettings(settings)->mInvBindMatrices;
+	if (index >= invBinds.size())
+		return false;
+
+	FromJolt(invBinds[index], outInvBind);
+	return true;
+}
+
+void JPH_SoftBodySharedSettings_AddSkinnedConstraint(JPH_SoftBodySharedSettings* settings, const JPH_SoftSkinned* skinned)
+{
+	if (settings && skinned)
+		AsSoftBodySharedSettings(settings)->mSkinnedConstraints.push_back(ToJolt(skinned));
+}
+
+uint32_t JPH_SoftBodySharedSettings_GetSkinnedConstraintCount(const JPH_SoftBodySharedSettings* settings)
+{
+	return settings ? static_cast<uint32_t>(AsSoftBodySharedSettings(settings)->mSkinnedConstraints.size()) : 0;
+}
+
+bool JPH_SoftBodySharedSettings_GetSkinnedConstraint(const JPH_SoftBodySharedSettings* settings, uint32_t index, JPH_SoftSkinned* outSkinned)
+{
+	if (!settings || !outSkinned)
+		return false;
+
+	const auto& skinnedConstraints = AsSoftBodySharedSettings(settings)->mSkinnedConstraints;
+	if (index >= skinnedConstraints.size())
+		return false;
+
+	FromJolt(skinnedConstraints[index], outSkinned);
+	return true;
+}
+
+void JPH_SoftBodySharedSettings_AddLRAConstraint(JPH_SoftBodySharedSettings* settings, const JPH_SoftLRA* lra)
+{
+	if (settings && lra)
+		AsSoftBodySharedSettings(settings)->mLRAConstraints.push_back(ToJolt(lra));
+}
+
+uint32_t JPH_SoftBodySharedSettings_GetLRAConstraintCount(const JPH_SoftBodySharedSettings* settings)
+{
+	return settings ? static_cast<uint32_t>(AsSoftBodySharedSettings(settings)->mLRAConstraints.size()) : 0;
+}
+
+bool JPH_SoftBodySharedSettings_GetLRAConstraint(const JPH_SoftBodySharedSettings* settings, uint32_t index, JPH_SoftLRA* outLRA)
+{
+	if (!settings || !outLRA)
+		return false;
+
+	const auto& lras = AsSoftBodySharedSettings(settings)->mLRAConstraints;
+	if (index >= lras.size())
+		return false;
+
+	FromJolt(lras[index], outLRA);
+	return true;
 }
 
 /* JPH_SoftBodyCreationSettings */
@@ -8061,6 +8267,158 @@ void JPH_SoftBodyMotionProperties_GetVertexPositions(const JPH_SoftBodyMotionPro
 	const uint32_t writeCount = capacity < numVertices ? capacity : numVertices;
 	for (uint32_t i = 0; i < writeCount; ++i)
 		FromJolt(vertices[i].mPosition, &outPositions[i]);
+}
+
+bool JPH_SoftBodyMotionProperties_GetVertices(const JPH_SoftBodyMotionProperties* properties, JPH_SoftBodyVertex* outVertices, uint32_t count)
+{
+	if (!properties || !outVertices)
+		return false;
+
+	const auto& vertices = AsSoftBodyMotionProperties(properties)->GetVertices();
+	const uint32_t numVertices = static_cast<uint32_t>(vertices.size());
+	const uint32_t writeCount = count < numVertices ? count : numVertices;
+	for (uint32_t i = 0; i < writeCount; ++i)
+		FromJolt(vertices[i], &outVertices[i]);
+
+	return true;
+}
+
+uint32_t JPH_SoftBodyMotionProperties_GetFaceCount(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? static_cast<uint32_t>(AsSoftBodyMotionProperties(properties)->GetFaces().size()) : 0;
+}
+
+bool JPH_SoftBodyMotionProperties_GetFace(const JPH_SoftBodyMotionProperties* properties, uint32_t index, JPH_SoftFace* outFace)
+{
+	if (!properties || !outFace)
+		return false;
+
+	const auto& faces = AsSoftBodyMotionProperties(properties)->GetFaces();
+	if (index >= faces.size())
+		return false;
+
+	const auto& face = faces[index];
+	outFace->vertex1 = face.mVertex[0];
+	outFace->vertex2 = face.mVertex[1];
+	outFace->vertex3 = face.mVertex[2];
+	outFace->materialIndex = face.mMaterialIndex;
+	return true;
+}
+
+uint32_t JPH_SoftBodyMotionProperties_GetNumIterations(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetNumIterations() : 0;
+}
+
+void JPH_SoftBodyMotionProperties_SetNumIterations(JPH_SoftBodyMotionProperties* properties, uint32_t iterations)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetNumIterations(iterations);
+}
+
+float JPH_SoftBodyMotionProperties_GetPressure(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetPressure() : 0.0f;
+}
+
+void JPH_SoftBodyMotionProperties_SetPressure(JPH_SoftBodyMotionProperties* properties, float pressure)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetPressure(pressure);
+}
+
+bool JPH_SoftBodyMotionProperties_GetUpdatePosition(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetUpdatePosition() : false;
+}
+
+void JPH_SoftBodyMotionProperties_SetUpdatePosition(JPH_SoftBodyMotionProperties* properties, bool updatePosition)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetUpdatePosition(updatePosition);
+}
+
+bool JPH_SoftBodyMotionProperties_GetFacesDoubleSided(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetFacesDoubleSided() : false;
+}
+
+void JPH_SoftBodyMotionProperties_SetFacesDoubleSided(JPH_SoftBodyMotionProperties* properties, bool facesDoubleSided)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetFacesDoubleSided(facesDoubleSided);
+}
+
+bool JPH_SoftBodyMotionProperties_GetEnableSkinConstraints(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetEnableSkinConstraints() : false;
+}
+
+void JPH_SoftBodyMotionProperties_SetEnableSkinConstraints(JPH_SoftBodyMotionProperties* properties, bool enabled)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetEnableSkinConstraints(enabled);
+}
+
+float JPH_SoftBodyMotionProperties_GetSkinnedMaxDistanceMultiplier(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetSkinnedMaxDistanceMultiplier() : 0.0f;
+}
+
+void JPH_SoftBodyMotionProperties_SetSkinnedMaxDistanceMultiplier(JPH_SoftBodyMotionProperties* properties, float multiplier)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetSkinnedMaxDistanceMultiplier(multiplier);
+}
+
+float JPH_SoftBodyMotionProperties_GetVertexRadius(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetVertexRadius() : 0.0f;
+}
+
+void JPH_SoftBodyMotionProperties_SetVertexRadius(JPH_SoftBodyMotionProperties* properties, float radius)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->SetVertexRadius(radius);
+}
+
+void JPH_SoftBodyMotionProperties_GetLocalBounds(const JPH_SoftBodyMotionProperties* properties, JPH_AABox* result)
+{
+	if (properties && result)
+		FromJolt(AsSoftBodyMotionProperties(properties)->GetLocalBounds(), result);
+}
+
+float JPH_SoftBodyMotionProperties_GetVolume(const JPH_SoftBodyMotionProperties* properties)
+{
+	return properties ? AsSoftBodyMotionProperties(properties)->GetVolume() : 0.0f;
+}
+
+void JPH_SoftBodyMotionProperties_CalculateMassAndInertia(JPH_SoftBodyMotionProperties* properties)
+{
+	if (properties)
+		AsSoftBodyMotionProperties(properties)->CalculateMassAndInertia();
+}
+
+void JPH_SoftBodyMotionProperties_SkinVertices(JPH_SoftBodyMotionProperties* properties, const JPH_RMat4* centerOfMassTransform, const JPH_Mat4* jointMatrices, uint32_t jointCount, bool hardSkinAll, JPH_TempAllocator* tempAllocator)
+{
+	if (!properties || (jointCount > 0 && !jointMatrices))
+		return;
+
+	JPH::TempAllocator* allocator = tempAllocator ? AsTempAllocator(tempAllocator) : s_TempAllocator;
+	if (!allocator)
+		return;
+
+	JPH::RMat44 joltCenterOfMassTransform = centerOfMassTransform ? ToJolt(centerOfMassTransform) : JPH::RMat44::sIdentity();
+	const JPH::Mat44* joltJointMatrices = jointMatrices ? reinterpret_cast<const JPH::Mat44*>(jointMatrices) : nullptr;
+	AsSoftBodyMotionProperties(properties)->SkinVertices(joltCenterOfMassTransform, joltJointMatrices, static_cast<JPH::uint>(jointCount), hardSkinAll, *allocator);
+}
+
+void JPH_SoftBodyMotionProperties_CustomUpdate(JPH_SoftBodyMotionProperties* properties, float deltaTime, JPH_Body* body, JPH_PhysicsSystem* system)
+{
+	if (!properties || !body || !system || !system->physicsSystem)
+		return;
+
+	AsSoftBodyMotionProperties(properties)->CustomUpdate(deltaTime, *AsBody(body), *system->physicsSystem);
 }
 
 /* Contact Listener */

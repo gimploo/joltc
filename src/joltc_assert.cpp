@@ -222,6 +222,11 @@ static_assert((int)JPH_SoftBodyBendType_None == (int)JPH::SoftBodySharedSettings
 static_assert((int)JPH_SoftBodyBendType_Distance == (int)JPH::SoftBodySharedSettings::EBendType::Distance);
 static_assert((int)JPH_SoftBodyBendType_Dihedral == (int)JPH::SoftBodySharedSettings::EBendType::Dihedral);
 
+// ELRAType
+static_assert((int)JPH_SoftBodyLRAType_None == (int)JPH::SoftBodySharedSettings::ELRAType::None);
+static_assert((int)JPH_SoftBodyLRAType_EuclideanDistance == (int)JPH::SoftBodySharedSettings::ELRAType::EuclideanDistance);
+static_assert((int)JPH_SoftBodyLRAType_GeodesicDistance == (int)JPH::SoftBodySharedSettings::ELRAType::GeodesicDistance);
+
 
 #if defined(_M_X64) || defined(__x86_64__) || defined(__aarch64__)
     // 64-bit Platform Sizes

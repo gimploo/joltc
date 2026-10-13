@@ -27,6 +27,7 @@ set(TEST_SOURCES
     test_character.cpp
     test_vehicle.cpp
     test_skeleton.cpp
+    test_softbody.cpp
 )
 
 # Create test executable

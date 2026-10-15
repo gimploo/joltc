@@ -2051,10 +2051,42 @@ JPH_CAPI JPH_Body* JPH_BodyInterface_CreateSoftBodyWithID(JPH_BodyInterface* bod
 JPH_CAPI JPH_Body* JPH_BodyInterface_CreateSoftBodyWithoutID(JPH_BodyInterface* bodyInterface, const JPH_SoftBodyCreationSettings* settings);
 JPH_CAPI JPH_BodyID JPH_BodyInterface_CreateAndAddSoftBody(JPH_BodyInterface* bodyInterface, const JPH_SoftBodyCreationSettings* settings, JPH_Activation activationMode);
 
+/// Convenience helper that creates count rigid bodies from the same settings and adds them to the
+/// physics system in a single batch (more efficient than calling CreateAndAddBody repeatedly).
+/// The created body IDs are written to outBodyIDs (which must hold at least count entries).
+/// @return The number of bodies that were created and added. This can be less than count if the
+/// body pool ran out. An invalid ID is written for any body that failed to be created.
+JPH_CAPI uint32_t JPH_BodyInterface_CreateAndAddBodies(JPH_BodyInterface* bodyInterface, const JPH_BodyCreationSettings* settings, uint32_t count, JPH_BodyID* outBodyIDs, JPH_Activation activationMode);
+
 JPH_CAPI void JPH_BodyInterface_AddBody(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID, JPH_Activation activationMode);
 JPH_CAPI void JPH_BodyInterface_RemoveBody(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID);
 JPH_CAPI void JPH_BodyInterface_RemoveAndDestroyBody(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID);
 JPH_CAPI bool JPH_BodyInterface_IsAdded(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID);
+
+/* Batch add / remove interface. Adding many bodies one at a time is inefficient for the broadphase;
+ * prefer these functions when adding or removing more than a handful of bodies at once. */
+typedef void* JPH_BodyInterface_AddState;
+
+/// Prepare adding count bodies at ioBodyIDs to the physics system. Returns a handle that must be
+/// passed to AddBodiesFinalize or AddBodiesAbort. This can run on a background thread without
+/// influencing the physics system. ioBodyIDs may be shuffled by this function and must be kept
+/// unmodified (same array contents) until AddBodiesFinalize/AddBodiesAbort is called.
+JPH_CAPI JPH_BodyInterface_AddState JPH_BodyInterface_AddBodiesPrepare(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count);
+
+/// Finalize adding bodies to the physics system; pass the handle returned by AddBodiesPrepare.
+/// The same ioBodyIDs array that was passed to AddBodiesPrepare must be passed again (unmodified).
+JPH_CAPI void JPH_BodyInterface_AddBodiesFinalize(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count, JPH_BodyInterface_AddState addState, JPH_Activation activationMode);
+
+/// Abort adding bodies to the physics system; pass the handle returned by AddBodiesPrepare.
+/// The same ioBodyIDs array that was passed to AddBodiesPrepare must be passed again (unmodified).
+JPH_CAPI void JPH_BodyInterface_AddBodiesAbort(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count, JPH_BodyInterface_AddState addState);
+
+/// Remove count bodies at ioBodyIDs from the physics system. Bodies must have been added first.
+/// ioBodyIDs may be shuffled by this function.
+JPH_CAPI void JPH_BodyInterface_RemoveBodies(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count);
+
+/// Destroy count bodies. Make sure the bodies have been removed from the physics system first.
+JPH_CAPI void JPH_BodyInterface_DestroyBodies(JPH_BodyInterface* bodyInterface, const JPH_BodyID* bodyIDs, uint32_t count);
 JPH_CAPI JPH_BodyType JPH_BodyInterface_GetBodyType(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID);
 JPH_CAPI const JPH_Body* JPH_PhysicsSystem_GetBodyPtr(const JPH_PhysicsSystem* system, JPH_BodyID bodyID);
 

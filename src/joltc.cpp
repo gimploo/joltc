@@ -6519,6 +6519,39 @@ JPH_BodyID JPH_BodyInterface_CreateAndAddSoftBody(JPH_BodyInterface* bodyInterfa
 	return bodyID.GetIndexAndSequenceNumber();
 }
 
+uint32_t JPH_BodyInterface_CreateAndAddBodies(JPH_BodyInterface* bodyInterface, const JPH_BodyCreationSettings* settings, uint32_t count, JPH_BodyID* outBodyIDs, JPH_Activation activationMode)
+{
+	auto* bodyInterfaceImpl = AsBodyInterface(bodyInterface);
+
+	Array<BodyID> bodyIDs;
+	bodyIDs.reserve(count);
+
+	for (uint32_t i = 0; i < count; ++i)
+	{
+		Body* body = bodyInterfaceImpl->CreateBody(*AsBodyCreationSettings(settings));
+		if (body == nullptr)
+			break;
+
+		bodyIDs.push_back(body->GetID());
+	}
+
+	if (!bodyIDs.empty())
+	{
+		// Add all created bodies in a single batch so the broadphase is updated efficiently.
+		BodyInterface::AddState addState = bodyInterfaceImpl->AddBodiesPrepare(bodyIDs.data(), (int)bodyIDs.size());
+		bodyInterfaceImpl->AddBodiesFinalize(bodyIDs.data(), (int)bodyIDs.size(), addState, static_cast<JPH::EActivation>(activationMode));
+	}
+
+	for (size_t i = 0; i < bodyIDs.size(); ++i)
+		outBodyIDs[i] = bodyIDs[i].GetIndexAndSequenceNumber();
+
+	// Mark any requested slots that could not be filled with an invalid body ID.
+	for (uint32_t i = (uint32_t)bodyIDs.size(); i < count; ++i)
+		outBodyIDs[i] = JPH::BodyID().GetIndexAndSequenceNumber();
+
+	return (uint32_t)bodyIDs.size();
+}
+
 void JPH_BodyInterface_AddBody(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID, JPH_Activation activationMode)
 {
 	JPH::BodyID joltBodyID(bodyID);
@@ -6542,6 +6575,36 @@ void JPH_BodyInterface_RemoveAndDestroyBody(JPH_BodyInterface* bodyInterface, JP
 
 	AsBodyInterface(bodyInterface)->RemoveBody(joltBodyID);
 	AsBodyInterface(bodyInterface)->DestroyBody(joltBodyID);
+}
+
+JPH_BodyInterface_AddState JPH_BodyInterface_AddBodiesPrepare(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count)
+{
+	return AsBodyInterface(bodyInterface)->AddBodiesPrepare(reinterpret_cast<JPH::BodyID*>(ioBodyIDs), (int)count);
+}
+
+void JPH_BodyInterface_AddBodiesFinalize(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count, JPH_BodyInterface_AddState addState, JPH_Activation activationMode)
+{
+	AsBodyInterface(bodyInterface)->AddBodiesFinalize(
+		reinterpret_cast<JPH::BodyID*>(ioBodyIDs),
+		(int)count,
+		addState,
+		static_cast<JPH::EActivation>(activationMode)
+	);
+}
+
+void JPH_BodyInterface_AddBodiesAbort(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count, JPH_BodyInterface_AddState addState)
+{
+	AsBodyInterface(bodyInterface)->AddBodiesAbort(reinterpret_cast<JPH::BodyID*>(ioBodyIDs), (int)count, addState);
+}
+
+void JPH_BodyInterface_RemoveBodies(JPH_BodyInterface* bodyInterface, JPH_BodyID* ioBodyIDs, uint32_t count)
+{
+	AsBodyInterface(bodyInterface)->RemoveBodies(reinterpret_cast<JPH::BodyID*>(ioBodyIDs), (int)count);
+}
+
+void JPH_BodyInterface_DestroyBodies(JPH_BodyInterface* bodyInterface, const JPH_BodyID* bodyIDs, uint32_t count)
+{
+	AsBodyInterface(bodyInterface)->DestroyBodies(reinterpret_cast<const JPH::BodyID*>(bodyIDs), (int)count);
 }
 
 bool JPH_BodyInterface_IsAdded(JPH_BodyInterface* bodyInterface, JPH_BodyID bodyID)

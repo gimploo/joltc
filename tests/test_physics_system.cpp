@@ -463,3 +463,125 @@ TEST_F(PhysicsSystemTest, MultipleBodies) {
         JPH_BodyInterface_DestroyBody(bodyInterface, bodyIds[i]);
     }
 }
+
+TEST_F(PhysicsSystemTest, CreateAndAddBodies_Batch) {
+    JPH_BodyInterface* bodyInterface = JPH_PhysicsSystem_GetBodyInterface(physicsSystem);
+    ASSERT_NE(bodyInterface, nullptr);
+
+    JPH_SphereShape* shape = JPH_SphereShape_Create(1.0f);
+    ASSERT_NE(shape, nullptr);
+
+    JPH_Vec3 position = {0.0f, 10.0f, 0.0f};
+    JPH_Quat rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    JPH_BodyCreationSettings* bodySettings = JPH_BodyCreationSettings_Create3(
+        (const JPH_Shape*)shape, &position, &rotation,
+        JPH_MotionType_Dynamic, ObjectLayers::MOVING);
+    ASSERT_NE(bodySettings, nullptr);
+
+    const uint32_t NUM_BODIES = 32;
+    JPH_BodyID bodyIds[NUM_BODIES];
+
+    uint32_t created = JPH_BodyInterface_CreateAndAddBodies(
+        bodyInterface, bodySettings, NUM_BODIES, bodyIds, JPH_Activation_Activate);
+    EXPECT_EQ(created, NUM_BODIES);
+
+    EXPECT_EQ(JPH_PhysicsSystem_GetNumBodies(physicsSystem), NUM_BODIES);
+
+    for (uint32_t i = 0; i < NUM_BODIES; i++) {
+        EXPECT_NE(bodyIds[i], 0xFFFFFFFFu);
+        EXPECT_TRUE(JPH_BodyInterface_IsAdded(bodyInterface, bodyIds[i]));
+    }
+
+    uint32_t numActiveBodies = JPH_PhysicsSystem_GetNumActiveBodies(physicsSystem, JPH_BodyType_Rigid);
+    EXPECT_EQ(numActiveBodies, NUM_BODIES);
+
+    // RemoveBodies may shuffle the array; the same (possibly reordered) array can then be destroyed.
+    JPH_BodyInterface_RemoveBodies(bodyInterface, bodyIds, NUM_BODIES);
+    JPH_BodyInterface_DestroyBodies(bodyInterface, bodyIds, NUM_BODIES);
+
+    EXPECT_EQ(JPH_PhysicsSystem_GetNumBodies(physicsSystem), 0u);
+
+    JPH_BodyCreationSettings_Destroy(bodySettings);
+    JPH_Shape_Destroy((JPH_Shape*)shape);
+}
+
+TEST_F(PhysicsSystemTest, AddBodiesPrepareFinalize) {
+    JPH_BodyInterface* bodyInterface = JPH_PhysicsSystem_GetBodyInterface(physicsSystem);
+    ASSERT_NE(bodyInterface, nullptr);
+
+    JPH_SphereShape* shape = JPH_SphereShape_Create(1.0f);
+    ASSERT_NE(shape, nullptr);
+
+    JPH_Vec3 position = {0.0f, 10.0f, 0.0f};
+    JPH_Quat rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    JPH_BodyCreationSettings* bodySettings = JPH_BodyCreationSettings_Create3(
+        (const JPH_Shape*)shape, &position, &rotation,
+        JPH_MotionType_Dynamic, ObjectLayers::MOVING);
+    ASSERT_NE(bodySettings, nullptr);
+
+    const uint32_t NUM_BODIES = 8;
+    JPH_BodyID bodyIds[NUM_BODIES];
+
+    for (uint32_t i = 0; i < NUM_BODIES; i++) {
+        JPH_Body* body = JPH_BodyInterface_CreateBody(bodyInterface, bodySettings);
+        ASSERT_NE(body, nullptr);
+        bodyIds[i] = JPH_Body_GetID(body);
+    }
+
+    // Created but not yet added to the broadphase.
+    for (uint32_t i = 0; i < NUM_BODIES; i++)
+        EXPECT_FALSE(JPH_BodyInterface_IsAdded(bodyInterface, bodyIds[i]));
+
+    JPH_BodyInterface_AddState state = JPH_BodyInterface_AddBodiesPrepare(bodyInterface, bodyIds, NUM_BODIES);
+    JPH_BodyInterface_AddBodiesFinalize(bodyInterface, bodyIds, NUM_BODIES, state, JPH_Activation_Activate);
+
+    for (uint32_t i = 0; i < NUM_BODIES; i++)
+        EXPECT_TRUE(JPH_BodyInterface_IsAdded(bodyInterface, bodyIds[i]));
+
+    JPH_BodyInterface_RemoveBodies(bodyInterface, bodyIds, NUM_BODIES);
+    JPH_BodyInterface_DestroyBodies(bodyInterface, bodyIds, NUM_BODIES);
+
+    JPH_BodyCreationSettings_Destroy(bodySettings);
+    JPH_Shape_Destroy((JPH_Shape*)shape);
+}
+
+TEST_F(PhysicsSystemTest, AddBodiesAbort) {
+    JPH_BodyInterface* bodyInterface = JPH_PhysicsSystem_GetBodyInterface(physicsSystem);
+    ASSERT_NE(bodyInterface, nullptr);
+
+    JPH_SphereShape* shape = JPH_SphereShape_Create(1.0f);
+    ASSERT_NE(shape, nullptr);
+
+    JPH_Vec3 position = {0.0f, 10.0f, 0.0f};
+    JPH_Quat rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    JPH_BodyCreationSettings* bodySettings = JPH_BodyCreationSettings_Create3(
+        (const JPH_Shape*)shape, &position, &rotation,
+        JPH_MotionType_Dynamic, ObjectLayers::MOVING);
+    ASSERT_NE(bodySettings, nullptr);
+
+    const uint32_t NUM_BODIES = 4;
+    JPH_BodyID bodyIds[NUM_BODIES];
+
+    for (uint32_t i = 0; i < NUM_BODIES; i++) {
+        JPH_Body* body = JPH_BodyInterface_CreateBody(bodyInterface, bodySettings);
+        ASSERT_NE(body, nullptr);
+        bodyIds[i] = JPH_Body_GetID(body);
+    }
+
+    JPH_BodyInterface_AddState state = JPH_BodyInterface_AddBodiesPrepare(bodyInterface, bodyIds, NUM_BODIES);
+    JPH_BodyInterface_AddBodiesAbort(bodyInterface, bodyIds, NUM_BODIES, state);
+
+    // Aborted: the bodies remain allocated but were never added to the broadphase.
+    for (uint32_t i = 0; i < NUM_BODIES; i++)
+        EXPECT_FALSE(JPH_BodyInterface_IsAdded(bodyInterface, bodyIds[i]));
+
+    // Bodies were never added; they can still be destroyed.
+    JPH_BodyInterface_DestroyBodies(bodyInterface, bodyIds, NUM_BODIES);
+    EXPECT_EQ(JPH_PhysicsSystem_GetNumBodies(physicsSystem), 0u);
+
+    JPH_BodyCreationSettings_Destroy(bodySettings);
+    JPH_Shape_Destroy((JPH_Shape*)shape);
+}
